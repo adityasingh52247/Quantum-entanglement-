@@ -3,256 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantum Entanglement Visualizer</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-
-    <style>
-        :root {
-            --bg: #020205;
-            --text: #e0e0e0;
-            --glass: rgba(10, 15, 30, 0.6);
-            --border: rgba(100, 200, 255, 0.2);
-            --cyan: #00e5ff;
-            --magenta: #ff00ea;
-        }
-
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: monospace; overflow: hidden; }
-        
-        .video-container { position: absolute; width: 100vw; height: 100vh; }
-        .input_video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); filter: grayscale(100%) opacity(0.3); z-index: 0; }
-        #quantumCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); z-index: 5; }
-
-        #hud {
-            position: absolute; top: 20px; left: 20px; z-index: 10;
-            background: var(--glass); border: 1px solid var(--border);
-            padding: 20px; border-radius: 8px; backdrop-filter: blur(10px);
-            box-shadow: 0 0 30px rgba(0, 229, 255, 0.1);
-        }
-
-        .sys-text { font-size: 14px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .data-val { color: var(--cyan); font-weight: bold; }
-        .alert { color: var(--magenta); font-weight: bold; }
-
-        #startOverlay {
-            position: absolute; inset: 0; background: rgba(0,0,0,0.9); z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        
-        button {
-            padding: 15px 30px; background: transparent; border: 1px solid var(--cyan);
-            color: var(--cyan); font-family: monospace; font-size: 16px; cursor: pointer;
-            transition: 0.3s; text-transform: uppercase; letter-spacing: 2px;
-        }
-        button:hover { background: var(--cyan); color: #000; box-shadow: 0 0 20px var(--cyan); }
-        .hidden { display: none !important; }
-    </style>
+    <title>Quantum Entanglement Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="particlePhysicsEngine.js"></script>
+    <script src="multiDimensionalVisualization.js"></script>
+    <script src="energyLevelIndicators.js"></script>
+    <script src="waveformAnalyzer.js"></script>
+    <script src="correlationStrengthMeter.js"></script>
+    <script src="advancedHUD.js"></script>
+    <script src="soundVisualization.js"></script>
+    <script src="historyTracking.js"></script>
 </head>
 <body>
-
-    <div id="startOverlay">
-        <h1 style="color: var(--cyan); font-weight: normal; letter-spacing: 5px;">SYSTEM: QUBIT LINK</h1>
-        <p style="color: #666; margin-bottom: 30px;">Initialize optical tracking for correlation mapping</p>
-        <button id="startBtn">Initialize Observer</button>
+    <div id="visualization-container">
+        <h1>Quantum Entanglement Visualization</h1>
+        <div id="quantum-visualization"></div>
+        <div id="energy-levels"></div>
+        <div id="waveform"></div>
+        <div id="correlation-meter"></div>
+        <div id="hud"></div>
+        <div id="history"></div>
     </div>
-
-    <div class="video-container">
-        <video class="input_video" autoplay playsinline></video>
-        <canvas id="quantumCanvas"></canvas>
-    </div>
-
-    <div id="hud" class="hidden">
-        <div class="sys-text">System Status: <span class="data-val">ONLINE</span></div>
-        <div class="sys-text">Qubits Active: <span class="data-val" id="ui-qubits">0</span></div>
-        <div class="sys-text">Wave Function: <span class="data-val" id="ui-state">Superposition</span></div>
-        <div class="sys-text" style="margin-top: 15px; font-size: 11px; color: #888;">
-            [ACTION]: Pinch fingers to measure and collapse state.
-        </div>
-    </div>
-
-<script>
-const videoElement = document.querySelector('.input_video');
-const canvas = document.getElementById('quantumCanvas');
-const ctx = canvas.getContext('2d');
-const uiQubits = document.getElementById('ui-qubits');
-const uiState = document.getElementById('ui-state');
-
-let width = window.innerWidth;
-let height = window.innerHeight;
-let currentHands = [];
-let time = 0;
-
-// Quantum State Variables
-let isCollapsed = false;
-let collapsedColor1 = '';
-let collapsedColor2 = '';
-
-function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
-}
-window.addEventListener('resize', resize);
-resize();
-
-document.getElementById('startBtn').addEventListener('click', () => {
-    document.getElementById('startOverlay').classList.add('hidden');
-    document.getElementById('hud').classList.remove('hidden');
-    initMediaPipe();
-    requestAnimationFrame(renderLoop);
-});
-
-function getDist(p1, p2) { return Math.hypot(p1.x - p2.x, p1.y - p2.y); }
-function mapToCanvas(point) { return { x: point.x * width, y: point.y * height }; }
-
-function drawQubit(pos, isCollapsed, color) {
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
-    
-    if (isCollapsed) {
-        ctx.fillStyle = color;
-        ctx.shadowBlur = 40;
-        ctx.shadowColor = color;
-        ctx.fill();
-        
-        // Draw definitive core
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 8, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff';
-        ctx.fill();
-    } else {
-        // Superposition state (fluctuating)
-        let phaseColor = `hsl(${(time * 200) % 360}, 100%, 50%)`;
-        ctx.strokeStyle = phaseColor;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 15]);
-        ctx.lineDashOffset = -time * 50;
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = phaseColor;
-        ctx.stroke();
-        ctx.setLineDash([]);
-        
-        // Inner probability cloud
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 10 + Math.sin(time * 10) * 5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + Math.sin(time*5)*0.2})`;
-        ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-}
-
-function drawEntanglementWave(p1, p2, isCollapsed, c1, c2) {
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-
-    const dist = getDist(p1, p2);
-    const steps = 50;
-    
-    if (isCollapsed) {
-        // Linear connection showing rigid correlation
-        let grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-        grad.addColorStop(0, c1);
-        grad.addColorStop(1, c2);
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 4;
-        ctx.lineTo(p2.x, p2.y);
-    } else {
-        // Probability wave
-        ctx.strokeStyle = `hsla(${(time * 150) % 360}, 100%, 60%, 0.6)`;
-        ctx.lineWidth = 2;
-        
-        for (let i = 0; i <= steps; i++) {
-            let t = i / steps;
-            let cx = p1.x + (p2.x - p1.x) * t;
-            let cy = p1.y + (p2.y - p1.y) * t;
-            
-            // Perpendicular wave interference
-            let waveAmp = Math.sin(t * Math.PI) * 50;
-            let offset = Math.sin(t * 20 + time * 5) * waveAmp;
-            
-            // Normalize normal vector
-            let dx = p2.x - p1.x;
-            let dy = p2.y - p1.y;
-            let len = Math.hypot(dx, dy);
-            let nx = -dy / len;
-            let ny = dx / len;
-
-            ctx.lineTo(cx + nx * offset, cy + ny * offset);
-        }
-    }
-    
-    ctx.shadowBlur = isCollapsed ? 20 : 10;
-    ctx.shadowColor = ctx.strokeStyle;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-}
-
-function renderLoop(timestamp) {
-    requestAnimationFrame(renderLoop);
-    time = timestamp / 1000;
-
-    // Fade background to create motion trails
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.globalCompositeOperation = 'screen';
-
-    if (currentHands.length > 0) {
-        uiQubits.innerText = currentHands.length;
-        
-        // Check for measurement (pinch) on ANY hand
-        let measuring = false;
-        currentHands.forEach(hand => {
-            if (getDist(hand[4], hand[8]) < 0.05) measuring = true;
-        });
-
-        if (measuring && !isCollapsed && currentHands.length === 2) {
-            // Wave function collapses! Randomize Bell State equivalent colors
-            isCollapsed = true;
-            uiState.innerHTML = '<span class="alert">COLLAPSED (Measured)</span>';
-            // Instantly assign correlated states (e.g., opposite spins)
-            collapsedColor1 = Math.random() > 0.5 ? '#00e5ff' : '#ff00ea';
-            collapsedColor2 = collapsedColor1 === '#00e5ff' ? '#ff00ea' : '#00e5ff';
-        } else if (!measuring && isCollapsed) {
-            // Reset to superposition when pinch released
-            isCollapsed = false;
-            uiState.innerText = 'Superposition';
-        }
-
-        if (currentHands.length === 2) {
-            // Use index finger tip (8) as the qubit location
-            let q1 = mapToCanvas(currentHands[0][8]);
-            let q2 = mapToCanvas(currentHands[1][8]);
-
-            drawEntanglementWave(q1, q2, isCollapsed, collapsedColor1, collapsedColor2);
-            drawQubit(q1, isCollapsed, collapsedColor1);
-            drawQubit(q2, isCollapsed, collapsedColor2);
-            
-        } else if (currentHands.length === 1) {
-             let q1 = mapToCanvas(currentHands[0][8]);
-             drawQubit(q1, false, ''); // Single qubit, no entanglement
-             isCollapsed = false;
-             uiState.innerText = 'Isolated (Unentangled)';
-        }
-
-    } else {
-        uiQubits.innerText = 0;
-        uiState.innerText = 'Idle';
-    }
-    
-    ctx.globalCompositeOperation = 'source-over';
-}
-
-function initMediaPipe() {
-    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
-    hands.onResults(results => { currentHands = results.multiHandLandmarks || []; });
-    const camera = new Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 1280, height: 720, facingMode: 'user' });
-    camera.start();
-}
-</script>
+    <script>
+        // Initialize all new features
+        initParticlePhysicsEngine();
+        initMultiDimensionalVisualization();
+        initEnergyLevelIndicators();
+        initWaveformAnalyzer();
+        initCorrelationStrengthMeter();
+        initAdvancedHUD();
+        initSoundVisualization();
+        initHistoryTracking();
+    </script>
 </body>
 </html>
